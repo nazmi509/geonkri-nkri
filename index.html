@@ -1,0 +1,710 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Jelajah NKRI – Peta Interaktif Bertenaga AI</title>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&family=Baloo+2:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --merah: #CC2936;
+    --putih: #F8F4E8;
+    --biru-tua: #0D2B55;
+    --biru-tengah: #1A5276;
+    --biru-muda: #2E86C1;
+    --emas: #F4A825;
+    --hijau: #1E8449;
+    --panel-bg: rgba(13,43,85,0.93);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Nunito', sans-serif;
+    background: linear-gradient(160deg, #0a1f40 0%, #0d2b55 40%, #0f3460 100%);
+    min-height: 100vh;
+    color: var(--putih);
+    overflow-x: hidden;
+  }
+
+  /* ── HEADER ── */
+  header {
+    text-align: center;
+    padding: 28px 16px 10px;
+  }
+  header::after {
+    content:''; display:block; width:80px; height:3px;
+    background: linear-gradient(90deg, var(--merah), var(--emas));
+    margin: 10px auto 0; border-radius: 3px;
+  }
+  .header-badge {
+    display:inline-block;
+    background: linear-gradient(135deg, var(--merah), #8B0000);
+    color:#fff; font-size:11px; font-weight:800;
+    padding:4px 14px; border-radius:20px;
+    letter-spacing:1.5px; text-transform:uppercase;
+    margin-bottom:10px;
+  }
+  header h1 {
+    font-family:'Baloo 2', cursive;
+    font-size: clamp(1.5rem, 5vw, 2.5rem);
+    font-weight:800; color:#fff; line-height:1.15;
+    text-shadow: 0 2px 18px rgba(0,0,0,0.5);
+  }
+  header h1 span { color: var(--emas); }
+  header p { font-size:0.85rem; color:rgba(255,255,255,0.6); margin-top:5px; }
+
+  /* ── PETUNJUK ── */
+  .petunjuk {
+    display:flex; flex-wrap:wrap; justify-content:center; gap:8px;
+    padding: 10px 16px;
+  }
+  .petunjuk-item {
+    background:rgba(255,255,255,0.07);
+    border:1px solid rgba(255,255,255,0.12);
+    border-radius:30px; padding:5px 14px;
+    font-size:0.75rem; display:flex; align-items:center; gap:6px;
+    color:rgba(255,255,255,0.8);
+  }
+  .dot { width:8px; height:8px; border-radius:50%; animation: pulse-dot 2s infinite; }
+  @keyframes pulse-dot { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.5;transform:scale(1.3)} }
+
+  /* ── LAYOUT ── */
+  .main-layout {
+    display:flex; flex-direction:column; align-items:center;
+    padding: 10px 12px 24px; gap:14px;
+    max-width:980px; margin:0 auto;
+  }
+
+  /* ── PETA ── */
+  .map-container {
+    width:100%; position:relative;
+    background: radial-gradient(ellipse at center, #1a4a7a 0%, #0d2b55 70%);
+    border-radius:20px;
+    border: 2px solid rgba(255,255,255,0.12);
+    overflow:hidden;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+    padding: 8px;
+  }
+  .map-container::before {
+    content:''; position:absolute; inset:0; pointer-events:none;
+    background:
+      repeating-linear-gradient(90deg, transparent 0px, transparent 40px, rgba(255,255,255,0.015) 40px, rgba(255,255,255,0.015) 41px),
+      repeating-linear-gradient(0deg,  transparent 0px, transparent 40px, rgba(255,255,255,0.015) 40px, rgba(255,255,255,0.015) 41px);
+  }
+
+  svg#peta { width:100%; height:auto; display:block; filter: drop-shadow(0 4px 20px rgba(0,0,0,0.4)); }
+
+  .zona { cursor:pointer; transition: all 0.22s ease; }
+  .zona:hover { filter: brightness(1.3) drop-shadow(0 4px 14px rgba(244,168,37,0.7)); }
+  .zona.aktif { filter: brightness(1.35) drop-shadow(0 0 20px rgba(244,168,37,1)); }
+
+  .zona-label {
+    font-family:'Nunito',sans-serif; font-weight:800; font-size:8px;
+    fill:white; pointer-events:none; text-anchor:middle;
+  }
+
+  .hotspot { cursor:pointer; transition: all 0.22s; }
+  .hotspot circle { transition: r 0.2s; }
+  .hotspot:hover circle.hs-main { r: 8; }
+  .hotspot.aktif circle.hs-main { r: 9; }
+  .hs-ring { animation: ring-pulse 2s infinite; }
+  @keyframes ring-pulse { 0%{r:12;opacity:.7} 100%{r:20;opacity:0} }
+
+  /* ── PANEL AI ── */
+  .ai-panel {
+    width:100%;
+    background: var(--panel-bg);
+    border-radius:20px;
+    border: 1px solid rgba(255,255,255,0.12);
+    backdrop-filter:blur(12px);
+    overflow:hidden;
+    box-shadow: 0 16px 48px rgba(0,0,0,0.4);
+  }
+  .ai-header {
+    background: linear-gradient(135deg, #1a3a6a, #0f2540);
+    padding:13px 18px;
+    display:flex; align-items:center; gap:10px;
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+  }
+  .ai-avatar {
+    width:40px; height:40px; border-radius:50%;
+    background: linear-gradient(135deg, var(--emas), var(--merah));
+    display:flex; align-items:center; justify-content:center;
+    font-size:1.2rem; flex-shrink:0;
+    box-shadow:0 0 14px rgba(244,168,37,0.5);
+  }
+  .ai-info h3 { font-family:'Baloo 2',cursive; font-size:0.95rem; font-weight:700; }
+  .ai-info span { font-size:0.7rem; color:var(--emas); font-weight:600; }
+  .status-dot {
+    width:8px; height:8px; border-radius:50%; background:#2ecc71;
+    margin-left:auto; box-shadow:0 0 8px #2ecc71;
+    animation: blink 2s infinite;
+  }
+  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:.3} }
+
+  .ai-body { padding:16px 18px; min-height:130px; }
+
+  .ai-welcome {
+    display:flex; flex-direction:column; align-items:center;
+    justify-content:center; gap:8px;
+    text-align:center; padding:14px 0;
+    color:rgba(255,255,255,0.5);
+  }
+  .ai-welcome .icon { font-size:2.2rem; }
+  .ai-welcome p { font-size:0.83rem; line-height:1.6; max-width:310px; }
+
+  .chat-area {
+    display:flex; flex-direction:column; gap:10px;
+    max-height:210px; overflow-y:auto; padding-right:4px;
+  }
+  .chat-area::-webkit-scrollbar { width:4px; }
+  .chat-area::-webkit-scrollbar-thumb { background:var(--biru-muda); border-radius:4px; }
+
+  .msg-ai, .msg-user {
+    max-width:92%; padding:11px 15px;
+    border-radius:18px; font-size:0.86rem; line-height:1.65;
+    animation: msg-in 0.3s ease;
+  }
+  @keyframes msg-in { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:none} }
+
+  .msg-ai {
+    background: linear-gradient(135deg, rgba(26,82,118,0.8), rgba(13,43,85,0.8));
+    border: 1px solid rgba(46,134,193,0.4);
+    border-bottom-left-radius:5px; align-self:flex-start;
+  }
+  .msg-ai .msg-label {
+    font-size:0.68rem; font-weight:700; color:var(--emas);
+    margin-bottom:5px; letter-spacing:.5px;
+  }
+  .msg-user {
+    background: linear-gradient(135deg, rgba(204,41,54,0.65), rgba(139,0,0,0.65));
+    border: 1px solid rgba(204,41,54,0.35);
+    border-bottom-right-radius:5px; align-self:flex-end;
+  }
+
+  .typing {
+    display:flex; align-items:center; gap:4px;
+    padding:10px 15px;
+    background: linear-gradient(135deg, rgba(26,82,118,0.6), rgba(13,43,85,0.6));
+    border-radius:18px; border-bottom-left-radius:5px;
+    width:fit-content; align-self:flex-start;
+    border: 1px solid rgba(46,134,193,0.3);
+  }
+  .typing span {
+    width:7px; height:7px; background:rgba(255,255,255,0.6);
+    border-radius:50%; animation: bounce 1.2s infinite;
+  }
+  .typing span:nth-child(2){ animation-delay:.2s }
+  .typing span:nth-child(3){ animation-delay:.4s }
+  @keyframes bounce { 0%,60%,100%{transform:translateY(0)} 30%{transform:translateY(-6px)} }
+
+  /* ── TTS BAR ── */
+  .tts-bar {
+    padding:8px 18px 12px;
+    display:flex; align-items:center; gap:8px; flex-wrap:wrap;
+  }
+  .btn-suara {
+    display:flex; align-items:center; gap:6px;
+    background: linear-gradient(135deg, var(--emas), #e67e22);
+    color:#fff; font-family:'Nunito',sans-serif;
+    font-weight:800; font-size:0.8rem;
+    border:none; border-radius:30px; cursor:pointer;
+    padding:8px 18px; transition:all .2s;
+    box-shadow: 0 4px 14px rgba(244,168,37,0.4);
+  }
+  .btn-suara:hover { transform:translateY(-1px); filter:brightness(1.1); }
+  .btn-suara:disabled { opacity:.5; cursor:not-allowed; transform:none; }
+  .btn-suara.playing {
+    background: linear-gradient(135deg, #2ecc71, #1a8a40);
+    box-shadow: 0 4px 14px rgba(46,204,113,0.5);
+    animation: pulse-btn 1.5s infinite;
+  }
+  @keyframes pulse-btn { 0%,100%{box-shadow:0 4px 14px rgba(46,204,113,0.4)} 50%{box-shadow:0 4px 24px rgba(46,204,113,0.7)} }
+
+  .btn-stop {
+    display:flex; align-items:center; gap:5px;
+    background:rgba(204,41,54,0.25); border:1px solid rgba(204,41,54,0.45);
+    color:#ff9999; border-radius:30px; cursor:pointer;
+    padding:8px 14px; font-family:'Nunito',sans-serif;
+    font-size:0.78rem; font-weight:700; transition:all .2s;
+  }
+  .btn-stop:hover { background:rgba(204,41,54,0.45); }
+
+  /* ── INPUT ── */
+  .input-area { padding:0 18px 16px; display:flex; gap:8px; }
+  .input-tanya {
+    flex:1; background:rgba(255,255,255,0.07);
+    border:1px solid rgba(255,255,255,0.15); border-radius:30px;
+    color:#fff; font-family:'Nunito',sans-serif; font-size:0.84rem;
+    padding:10px 16px; outline:none; transition:border-color .2s;
+  }
+  .input-tanya:focus { border-color:var(--biru-muda); }
+  .input-tanya::placeholder { color:rgba(255,255,255,0.32); }
+  .btn-tanya {
+    background: linear-gradient(135deg, var(--biru-muda), #1a4a8a);
+    color:#fff; border:none; border-radius:30px; cursor:pointer;
+    padding:10px 18px; font-family:'Nunito',sans-serif;
+    font-weight:700; font-size:0.8rem; transition:all .2s;
+    white-space:nowrap;
+  }
+  .btn-tanya:hover { filter:brightness(1.15); }
+  .btn-tanya:disabled { opacity:.5; cursor:not-allowed; }
+
+  /* ── FOOTER INFO ── */
+  .footer-info {
+    display:flex; flex-wrap:wrap; gap:7px;
+    justify-content:center; padding:0 12px 10px;
+  }
+  .info-chip {
+    background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.1);
+    border-radius:20px; padding:4px 13px; font-size:0.72rem;
+    color:rgba(255,255,255,0.55); display:flex; align-items:center; gap:4px;
+  }
+
+  /* ── TOAST ── */
+  .toast {
+    position:fixed; bottom:24px; left:50%; transform:translateX(-50%);
+    background:rgba(30,132,73,0.95); color:#fff;
+    padding:9px 22px; border-radius:30px; font-size:0.83rem; font-weight:700;
+    z-index:9999; opacity:0; pointer-events:none;
+    transition:opacity .3s, bottom .3s;
+    box-shadow:0 6px 24px rgba(0,0,0,0.4);
+  }
+  .toast.show { opacity:1; bottom:30px; }
+
+  @media(max-width:560px) {
+    .btn-suara, .btn-stop { font-size:0.73rem; padding:7px 12px; }
+    .ai-body { padding:12px 14px; }
+    .input-area { padding:0 12px 14px; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="header-badge">🏫 PPKn Kelas VII · Bab 5 · Sub Bab B</div>
+  <h1>Jelajah <span>Wilayah NKRI</span><br>Peta Interaktif + AI 🤖</h1>
+  <p>Klik wilayah di peta → AI menjelaskan dengan suara langsung! 🔊</p>
+</header>
+
+<div class="petunjuk">
+  <div class="petunjuk-item"><span class="dot" style="background:#2ecc71"></span>Klik pulau di peta</div>
+  <div class="petunjuk-item"><span class="dot" style="background:var(--emas)"></span>Dengarkan AI bersuara</div>
+  <div class="petunjuk-item"><span class="dot" style="background:#CC2936"></span>Klik titik merah = batas wilayah</div>
+  <div class="petunjuk-item"><span class="dot" style="background:var(--biru-muda)"></span>Ajukan pertanyaan</div>
+</div>
+
+<div class="main-layout">
+
+  <!-- PETA SVG -->
+  <div class="map-container">
+    <svg id="peta" viewBox="0 0 900 430" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <radialGradient id="lautGrad" cx="50%" cy="50%" r="60%">
+          <stop offset="0%" stop-color="#1a5c8a"/>
+          <stop offset="100%" stop-color="#0d2b55"/>
+        </radialGradient>
+      </defs>
+
+      <!-- Latar laut -->
+      <rect width="900" height="430" fill="url(#lautGrad)" rx="12"/>
+      <g stroke="rgba(255,255,255,0.03)" stroke-width="1">
+        <line x1="0" y1="86" x2="900" y2="86"/><line x1="0" y1="172" x2="900" y2="172"/>
+        <line x1="0" y1="258" x2="900" y2="258"/><line x1="0" y1="344" x2="900" y2="344"/>
+        <line x1="180" y1="0" x2="180" y2="430"/><line x1="360" y1="0" x2="360" y2="430"/>
+        <line x1="540" y1="0" x2="540" y2="430"/><line x1="720" y1="0" x2="720" y2="430"/>
+      </g>
+
+      <!-- Garis khatulistiwa -->
+      <line x1="0" y1="200" x2="900" y2="200" stroke="rgba(244,168,37,0.4)" stroke-width="1.5" stroke-dasharray="8,5"/>
+      <text x="825" y="196" fill="rgba(244,168,37,0.75)" font-size="8.5" font-family="Nunito" font-weight="700">Ekuator 0°</text>
+
+      <!-- Arah mata angin -->
+      <text x="450" y="22" text-anchor="middle" fill="rgba(255,255,255,0.28)" font-size="9.5" font-family="Nunito" font-weight="700">▲ UTARA</text>
+      <text x="450" y="424" text-anchor="middle" fill="rgba(255,255,255,0.28)" font-size="9.5" font-family="Nunito" font-weight="700">▼ SELATAN</text>
+      <text x="14" y="220" fill="rgba(255,255,255,0.28)" font-size="9.5" font-family="Nunito" font-weight="700">◄ BARAT</text>
+      <text x="848" y="220" fill="rgba(255,255,255,0.28)" font-size="9.5" font-family="Nunito" font-weight="700">TIMUR ►</text>
+
+      <!-- ZEE border luar -->
+      <rect x="8" y="28" width="884" height="374" rx="10" fill="rgba(26,111,163,0.06)" stroke="rgba(93,173,226,0.28)" stroke-width="1" stroke-dasharray="9,6"/>
+      <text x="450" y="46" text-anchor="middle" fill="rgba(93,173,226,0.7)" font-size="8" font-family="Nunito" font-weight="700">──── ZONA EKONOMI EKSKLUSIF (ZEE) 200 mil laut ────</text>
+
+      <!-- Klik ZEE area (tersembunyi, besar) -->
+      <rect class="zona" id="zona-zee" x="8" y="28" width="884" height="374" rx="10"
+        fill="transparent" onclick="klikZona('zee')" style="cursor:pointer"/>
+
+      <!-- SUMATERA -->
+      <g class="zona" id="zona-sumatera" onclick="klikZona('sumatera')">
+        <path d="M 60 128 L 78 116 L 98 110 L 120 107 L 145 110 L 165 118 L 176 132 L 180 150 L 178 170 L 170 188 L 158 202 L 140 215 L 120 224 L 100 228 L 80 223 L 63 210 L 52 194 L 48 175 L 50 156 L 56 142 Z"
+          fill="#2a9a4a" stroke="#1a6030" stroke-width="1.5"/>
+        <text class="zona-label" x="114" y="177">SUMATERA</text>
+      </g>
+
+      <!-- JAWA -->
+      <g class="zona" id="zona-jawa" onclick="klikZona('jawa')">
+        <path d="M 145 258 L 170 250 L 200 247 L 232 246 L 262 247 L 288 250 L 310 255 L 322 264 L 316 273 L 292 278 L 262 279 L 230 277 L 198 272 L 170 265 L 150 260 Z"
+          fill="#2a9a4a" stroke="#1a6030" stroke-width="1.5"/>
+        <text class="zona-label" x="233" y="267">JAWA</text>
+      </g>
+
+      <!-- KALIMANTAN -->
+      <g class="zona" id="zona-kalimantan" onclick="klikZona('kalimantan')">
+        <path d="M 282 115 L 310 104 L 344 100 L 376 102 L 404 110 L 422 126 L 432 148 L 430 170 L 420 192 L 403 208 L 380 218 L 350 222 L 320 217 L 296 202 L 278 184 L 272 162 L 276 140 Z"
+          fill="#33b55a" stroke="#1a6030" stroke-width="1.5"/>
+        <text class="zona-label" x="352" y="170">KALIMANTAN</text>
+      </g>
+
+      <!-- SULAWESI -->
+      <g class="zona" id="zona-sulawesi" onclick="klikZona('sulawesi')">
+        <!-- Badan utama -->
+        <path d="M 462 112 L 478 106 L 492 110 L 500 125 L 496 144 L 484 158 L 476 174 L 478 190 L 486 202 L 484 216 L 472 220 L 460 208 L 456 190 L 462 173 L 468 156 L 470 138 L 460 122 Z"
+          fill="#2a9a4a" stroke="#1a6030" stroke-width="1.5"/>
+        <!-- Lengan timur laut -->
+        <path d="M 490 128 L 514 116 L 538 112 L 552 118 L 550 132 L 534 140 L 510 142 L 492 136 Z"
+          fill="#2a9a4a" stroke="#1a6030" stroke-width="1.5"/>
+        <!-- Lengan tenggara -->
+        <path d="M 480 198 L 504 200 L 520 210 L 525 224 L 514 232 L 495 230 L 480 220 Z"
+          fill="#2a9a4a" stroke="#1a6030" stroke-width="1.5"/>
+        <text class="zona-label" x="494" y="163">SULAWESI</text>
+      </g>
+
+      <!-- PAPUA -->
+      <g class="zona" id="zona-papua" onclick="klikZona('papua')">
+        <path d="M 665 158 L 694 140 L 726 130 L 758 128 L 784 134 L 806 148 L 816 166 L 810 184 L 792 198 L 766 208 L 736 212 L 706 206 L 682 192 L 668 175 Z"
+          fill="#33b55a" stroke="#1a6030" stroke-width="1.5"/>
+        <!-- Ujung barat Papua (kepala burung) -->
+        <path d="M 636 172 L 654 164 L 670 166 L 668 180 L 652 184 L 636 180 Z"
+          fill="#33b55a" stroke="#1a6030" stroke-width="1.5"/>
+        <text class="zona-label" x="740" y="178">PAPUA</text>
+      </g>
+
+      <!-- NUSA TENGGARA -->
+      <g class="zona" id="zona-ntt" onclick="klikZona('ntt')">
+        <ellipse cx="355" cy="290" rx="20" ry="9" fill="#2a9a4a" stroke="#1a6030" stroke-width="1.5"/>
+        <ellipse cx="395" cy="295" rx="17" ry="9" fill="#2a9a4a" stroke="#1a6030" stroke-width="1.5"/>
+        <ellipse cx="432" cy="298" rx="14" ry="8" fill="#2a9a4a" stroke="#1a6030" stroke-width="1.5"/>
+        <ellipse cx="463" cy="299" rx="12" ry="7" fill="#2a9a4a" stroke="#1a6030" stroke-width="1.5"/>
+        <text class="zona-label" x="410" y="297">NUSA TENGGARA</text>
+      </g>
+
+      <!-- MALUKU -->
+      <g class="zona" id="zona-maluku" onclick="klikZona('maluku')">
+        <ellipse cx="572" cy="170" rx="11" ry="20" fill="#2a9a4a" stroke="#1a6030" stroke-width="1.5"/>
+        <ellipse cx="604" cy="150" rx="10" ry="16" fill="#2a9a4a" stroke="#1a6030" stroke-width="1.5"/>
+        <ellipse cx="594" cy="205" rx="9" ry="14" fill="#2a9a4a" stroke="#1a6030" stroke-width="1.5"/>
+        <ellipse cx="624" cy="194" rx="9" ry="13" fill="#2a9a4a" stroke="#1a6030" stroke-width="1.5"/>
+        <text class="zona-label" x="600" y="172">MALUKU</text>
+      </g>
+
+      <!-- ── 4 TITIK BATAS TERLUAR ── -->
+      <!-- BARAT: Pulau Rondo -->
+      <g class="hotspot" id="hs-barat" onclick="klikHotspot('barat')">
+        <circle class="hs-ring" cx="28" cy="170" r="12" fill="none" stroke="rgba(204,41,54,0.6)" stroke-width="1.5"/>
+        <circle class="hs-main" cx="28" cy="170" r="6" fill="#CC2936" stroke="white" stroke-width="1.8"/>
+        <text x="28" y="190" text-anchor="middle" fill="#ff9999" font-size="7.5" font-family="Nunito" font-weight="800">◄ BARAT</text>
+        <text x="28" y="199" text-anchor="middle" fill="rgba(255,255,255,0.55)" font-size="6.5" font-family="Nunito">P. Rondo</text>
+      </g>
+
+      <!-- TIMUR: Merauke -->
+      <g class="hotspot" id="hs-timur" onclick="klikHotspot('timur')">
+        <circle class="hs-ring" cx="872" cy="200" r="12" fill="none" stroke="rgba(204,41,54,0.6)" stroke-width="1.5"/>
+        <circle class="hs-main" cx="872" cy="200" r="6" fill="#CC2936" stroke="white" stroke-width="1.8"/>
+        <text x="872" y="220" text-anchor="middle" fill="#ff9999" font-size="7.5" font-family="Nunito" font-weight="800">TIMUR ►</text>
+        <text x="872" y="229" text-anchor="middle" fill="rgba(255,255,255,0.55)" font-size="6.5" font-family="Nunito">Merauke</text>
+      </g>
+
+      <!-- UTARA: Pulau Miangas -->
+      <g class="hotspot" id="hs-utara" onclick="klikHotspot('utara')">
+        <circle class="hs-ring" cx="534" cy="38" r="12" fill="none" stroke="rgba(204,41,54,0.6)" stroke-width="1.5"/>
+        <circle class="hs-main" cx="534" cy="38" r="6" fill="#CC2936" stroke="white" stroke-width="1.8"/>
+        <text x="534" y="22" text-anchor="middle" fill="#ff9999" font-size="7.5" font-family="Nunito" font-weight="800">UTARA ▲</text>
+        <text x="534" y="14" text-anchor="middle" fill="rgba(255,255,255,0.55)" font-size="6.5" font-family="Nunito">P. Miangas</text>
+      </g>
+
+      <!-- SELATAN: Pulau Rote -->
+      <g class="hotspot" id="hs-selatan" onclick="klikHotspot('selatan')">
+        <circle class="hs-ring" cx="388" cy="392" r="12" fill="none" stroke="rgba(204,41,54,0.6)" stroke-width="1.5"/>
+        <circle class="hs-main" cx="388" cy="392" r="6" fill="#CC2936" stroke="white" stroke-width="1.8"/>
+        <text x="388" y="412" text-anchor="middle" fill="#ff9999" font-size="7.5" font-family="Nunito" font-weight="800">SELATAN ▼</text>
+        <text x="388" y="421" text-anchor="middle" fill="rgba(255,255,255,0.55)" font-size="6.5" font-family="Nunito">P. Rote (NTT)</text>
+      </g>
+
+      <!-- Legenda mini -->
+      <rect x="16" y="336" width="148" height="62" rx="8" fill="rgba(0,0,0,0.45)" stroke="rgba(255,255,255,0.1)" stroke-width="1"/>
+      <text x="90" y="350" text-anchor="middle" fill="rgba(255,255,255,0.85)" font-size="8" font-family="Nunito" font-weight="800">LEGENDA</text>
+      <rect x="24" y="356" width="10" height="7" rx="2" fill="#2a9a4a"/>
+      <text x="39" y="363" fill="rgba(255,255,255,0.72)" font-size="7" font-family="Nunito">Wilayah Daratan</text>
+      <circle cx="29" cy="374" r="4" fill="#CC2936" stroke="white" stroke-width="1"/>
+      <text x="39" y="377" fill="rgba(255,255,255,0.72)" font-size="7" font-family="Nunito">Titik Batas Terluar</text>
+      <line x1="24" y1="388" x2="50" y2="388" stroke="rgba(93,173,226,0.8)" stroke-width="1.5" stroke-dasharray="5,3"/>
+      <text x="56" y="391" fill="rgba(255,255,255,0.72)" font-size="7" font-family="Nunito">Zona Perairan (ZEE)</text>
+    </svg>
+  </div>
+
+  <!-- PANEL AI -->
+  <div class="ai-panel">
+    <div class="ai-header">
+      <div class="ai-avatar">🤖</div>
+      <div class="ai-info">
+        <h3>NKRI-AI Assistant</h3>
+        <span>⚡ Powered by Claude AI · Siap Menjelaskan!</span>
+      </div>
+      <div class="status-dot"></div>
+    </div>
+
+    <div class="ai-body" id="aiBody">
+      <div class="ai-welcome" id="welcomeMsg">
+        <div class="icon">🗺️</div>
+        <p>Halo, Penjelajah NKRI! 👋<br>
+        Klik <strong>pulau hijau</strong> atau <strong>titik merah</strong> di peta atas,<br>
+        lalu aku akan menjelaskan dengan suara! 🔊</p>
+      </div>
+      <div class="chat-area" id="chatArea" style="display:none"></div>
+    </div>
+
+    <div class="tts-bar" id="ttsBar" style="display:none">
+      <button class="btn-suara" id="btnSuara" onclick="ulangSuara()">🔊 Dengarkan Lagi</button>
+      <button class="btn-stop" onclick="stopSuara()">⏹ Stop</button>
+    </div>
+
+    <div class="input-area">
+      <input type="text" class="input-tanya" id="inputTanya"
+        placeholder="Tanya apapun tentang Wilayah NKRI... 💬"
+        onkeydown="if(event.key==='Enter')kirimPertanyaan()">
+      <button class="btn-tanya" id="btnTanya" onclick="kirimPertanyaan()">Tanya 🚀</button>
+    </div>
+  </div>
+
+</div>
+
+<div class="footer-info">
+  <div class="info-chip">📚 PPKn Kelas VII Kur. Merdeka · Bab 5 hal. 152–159</div>
+  <div class="info-chip">🔊 Web Speech API · Suara Bahasa Indonesia</div>
+  <div class="info-chip">🤖 AI by Claude (Anthropic)</div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ============================================================
+// KONTEN PROMPT PER ZONA (dikirim ke backend /api/claude)
+// ============================================================
+const kontenZona = {
+  sumatera: {
+    judul: "Pulau Sumatera", emoji: "🌴",
+    prompt: `Jelaskan Pulau Sumatera sebagai bagian wilayah NKRI untuk siswa SMP kelas 7. Sertakan: letak astronomisnya (5°LU–6°LS, 95°–109°BT), bahwa Indonesia memiliki luas daratan ±2.028.087 km² (termasuk Sumatera sebagai pulau terbesar ke-6 dunia), posisinya di ujung barat yang berbatasan dengan Samudra Hindia dan wilayah laut India, serta hubungannya dengan konsep negara kepulauan berciri nusantara dari Pasal 1 UU No.43 Tahun 2008. Bahasa ramah, menarik, untuk siswa SMP. Maksimal 4 kalimat. Akhiri dengan 1 fakta unik.`
+  },
+  jawa: {
+    judul: "Pulau Jawa", emoji: "🏙️",
+    prompt: `Jelaskan Pulau Jawa sebagai bagian wilayah NKRI untuk siswa SMP kelas 7. Sertakan: letaknya (6°–9°LS, 105°–112°BT), statusnya sebagai pulau terpadat di dunia, perannya sebagai pusat pemerintahan Indonesia (Jakarta dan kini akan pindah ke IKN Nusantara di Kalimantan), bagiannya dari 16.766 pulau Indonesia (data BPS 2021), dan konsep nusantara: selat bukan memisahkan pulau, justru menghubungkan. Bahasa mudah dipahami siswa SMP. Maksimal 4 kalimat.`
+  },
+  kalimantan: {
+    judul: "Pulau Kalimantan (Borneo)", emoji: "🌿",
+    prompt: `Jelaskan Pulau Kalimantan sebagai bagian wilayah NKRI untuk siswa SMP kelas 7. Sertakan: statusnya sebagai pulau terbesar ketiga di dunia, fakta bahwa Kalimantan dibagi antara Indonesia, Malaysia (Sabah & Sarawak), dan Brunei Darussalam — hubungkan dengan keputusan BPUPK (Borneo Utara akhirnya menjadi Malaysia & Brunei), posisi Ibu Kota Nusantara (IKN) baru di Kalimantan Timur. Bahasa mudah dan menarik siswa SMP. Maksimal 4 kalimat.`
+  },
+  sulawesi: {
+    judul: "Pulau Sulawesi", emoji: "🦅",
+    prompt: `Jelaskan Pulau Sulawesi sebagai bagian wilayah NKRI untuk siswa SMP kelas 7. Sertakan: bentuknya yang sangat unik seperti huruf K dengan empat semenanjung/lengan, letaknya yang strategis di antara Kalimantan dan Maluku (dilewati garis khatulistiwa), dan perannya sebagai kesatuan wilayah NKRI yang dihubungkan oleh lautan (bukan dipisahkan). Bahasa menyenangkan untuk siswa SMP. Maksimal 4 kalimat. Akhiri dengan 1 fakta unik tentang Sulawesi.`
+  },
+  papua: {
+    judul: "Pulau Papua", emoji: "🦜",
+    prompt: `Jelaskan Pulau Papua sebagai bagian wilayah NKRI untuk siswa SMP kelas 7, sesuai buku PPKn Kurikulum Merdeka Bab 5 halaman 154-155. Sertakan: statusnya sebagai batas TIMUR Indonesia berbatasan langsung dengan Papua Nugini, letaknya (1°–9°LS, 131°–141°BT), fakta bahwa Papua adalah pulau terbesar ke-2 di dunia, dan alasan historisnya: Ir. Sukarno dalam sidang BPUPK merujuk Kitab Negarakertagama bahwa Papua adalah bagian wilayah Majapahit. Bahasa menarik siswa SMP. Maksimal 4 kalimat.`
+  },
+  ntt: {
+    judul: "Kepulauan Nusa Tenggara", emoji: "🐉",
+    prompt: `Jelaskan Kepulauan Nusa Tenggara (NTB dan NTT) sebagai bagian wilayah NKRI untuk siswa SMP kelas 7. Sertakan: letaknya di selatan Indonesia (7°–11°LS), Pulau Rote di NTT sebagai titik terluar NKRI di SELATAN berbatasan langsung dengan Australia melalui Laut Indonesia dan Laut Arafuru (sesuai buku PPKn Bab 5), serta keindahan alam Komodo dan Flores. Bahasa mudah dan menarik siswa SMP. Maksimal 4 kalimat.`
+  },
+  maluku: {
+    judul: "Kepulauan Maluku", emoji: "🌺",
+    prompt: `Jelaskan Kepulauan Maluku sebagai bagian wilayah NKRI untuk siswa SMP kelas 7. Sertakan: letaknya di antara Sulawesi dan Papua, julukannya sebagai Kepulauan Rempah-Rempah yang terkenal sejak zaman penjajahan, fakta bahwa Ir. Sukarno menyebut Kesultanan Ternate (Maluku) sebagai bukti sejarah klaim wilayah Indonesia hingga Papua (referensi Kitab Negarakertagama dalam sidang BPUPK), dan perannya dalam menjaga keutuhan NKRI di timur. Bahasa menarik siswa SMP. Maksimal 4 kalimat.`
+  },
+  zee: {
+    judul: "Zona Ekonomi Eksklusif (ZEE)", emoji: "⚓",
+    prompt: `Jelaskan konsep Zona Ekonomi Eksklusif (ZEE) Indonesia untuk siswa SMP kelas 7, berdasarkan buku PPKn Kurikulum Merdeka Bab 5 halaman 152-159. Sertakan: definisinya (area di luar laut teritorial dan zona tambahan dengan batas terluar 200 mil laut), luasnya 3.000.000 km² (data resmi BIG dan TNI AL), hak Indonesia untuk memanfaatkan sumber daya alam di zona ini (ikan, minyak, gas bumi), dan perbedaannya dengan Laut Teritorial (12 mil, luas 290.000 km²) dan Landas Kontinen (200 mil, 2.800.000 km²). Total perairan Indonesia: 6.400.000 km². Gunakan analogi mudah dipahami siswa SMP. Maksimal 4 kalimat.`
+  },
+  barat: {
+    judul: "Batas Barat NKRI — Pulau Rondo, Sabang", emoji: "🧭",
+    prompt: `Jelaskan batas BARAT wilayah NKRI untuk siswa SMP kelas 7, sesuai buku PPKn Kurikulum Merdeka Bab 5. Sertakan: Pulau Rondo (Sabang, Aceh) sebagai titik terluar barat Indonesia, berbatasan langsung dengan Samudra Hindia dan wilayah laut India (sesuai buku: wilayah barat berbatasan dengan India), posisi astronomisnya (sekitar 5°LU, 95°BT), dan kaitannya dengan semboyan "Sabang sampai Merauke" sebagai simbol persatuan wilayah NKRI. Bahasa menarik siswa SMP. Maksimal 4 kalimat. Akhiri dengan ajakan bangga menjaga wilayah.`
+  },
+  timur: {
+    judul: "Batas Timur NKRI — Merauke, Papua", emoji: "🌅",
+    prompt: `Jelaskan batas TIMUR wilayah NKRI untuk siswa SMP kelas 7, sesuai buku PPKn Kurikulum Merdeka Bab 5 halaman 154. Sertakan: Kota Merauke (Papua Selatan) sebagai titik terluar timur Indonesia, berbatasan langsung dengan negara Papua Nugini di Pulau Papua, posisi astronomisnya (sekitar 141°BT), dan kaitannya dengan frasa "Sabang sampai Merauke" — simbol bahwa NKRI membentang luas dari ujung barat ke timur. Bahasa menarik siswa SMP. Maksimal 4 kalimat. Akhiri dengan ajakan bangga.`
+  },
+  utara: {
+    judul: "Batas Utara NKRI — Pulau Miangas", emoji: "🌏",
+    prompt: `Jelaskan batas UTARA wilayah NKRI untuk siswa SMP kelas 7, sesuai buku PPKn Kurikulum Merdeka Bab 5. Sertakan: Pulau Miangas (Sulawesi Utara) sebagai titik terluar utara Indonesia, berbatasan langsung dengan Filipina, Malaysia, dan Singapura (sesuai buku: wilayah utara berbatasan dengan ketiga negara tersebut), posisi astronomisnya (5°32'LU, 126°35'BT), dan fakta menarik bahwa Pulau Miangas pernah dipersengketakan Belanda vs Amerika tahun 1928 namun tetap milik Indonesia. Bahasa menarik siswa SMP. Maksimal 4 kalimat.`
+  },
+  selatan: {
+    judul: "Batas Selatan NKRI — Pulau Rote, NTT", emoji: "🦘",
+    prompt: `Jelaskan batas SELATAN wilayah NKRI untuk siswa SMP kelas 7, sesuai buku PPKn Kurikulum Merdeka Bab 5. Sertakan: Pulau Rote (Nusa Tenggara Timur) sebagai titik terluar selatan Indonesia (sekitar 11°LS), berbatasan langsung dengan Laut Indonesia, Laut Arafuru, dan negara Australia (sesuai buku: wilayah selatan berbatasan dengan Australia), serta pentingnya menjaga kedaulatan di batas selatan yang berbatasan langsung dengan negara tetangga besar. Bahasa menarik siswa SMP. Maksimal 4 kalimat.`
+  }
+};
+
+// ============================================================
+// STATE
+// ============================================================
+let zonaAktif = null;
+let pesanTerakhirAI = '';
+let sedangMemuat = false;
+
+// ============================================================
+// KLIK ZONA & HOTSPOT
+// ============================================================
+function klikZona(id) {
+  if (sedangMemuat) return;
+  resetAktif();
+  zonaAktif = id;
+  const el = document.querySelector('#zona-' + id);
+  if (el) el.classList.add('aktif');
+  tanyaAI(id, false);
+}
+
+function klikHotspot(arah) {
+  if (sedangMemuat) return;
+  resetAktif();
+  zonaAktif = arah;
+  const el = document.querySelector('#hs-' + arah);
+  if (el) el.classList.add('aktif');
+  tanyaAI(arah, false);
+}
+
+function resetAktif() {
+  if (zonaAktif) {
+    const el = document.querySelector('#zona-' + zonaAktif) || document.querySelector('#hs-' + zonaAktif);
+    if (el) el.classList.remove('aktif');
+  }
+}
+
+// ============================================================
+// KIRIM PERTANYAAN MANUAL
+// ============================================================
+function kirimPertanyaan() {
+  const input = document.getElementById('inputTanya');
+  const teks = input.value.trim();
+  if (!teks || sedangMemuat) return;
+  input.value = '';
+  tanyaAI(null, true, teks);
+}
+
+// ============================================================
+// PANGGIL BACKEND (Netlify Function)
+// ============================================================
+async function tanyaAI(zonaId, dariUser, pertanyaanUser = '') {
+  stopSuara();
+  sedangMemuat = true;
+  document.getElementById('btnTanya').disabled = true;
+
+  // Tampilkan chat, sembunyikan welcome
+  document.getElementById('welcomeMsg').style.display = 'none';
+  document.getElementById('chatArea').style.display = 'flex';
+  const chatArea = document.getElementById('chatArea');
+
+  // Pesan dari user
+  if (dariUser && pertanyaanUser) {
+    appendMsg('user', pertanyaanUser);
+  } else if (zonaId && kontenZona[zonaId]) {
+    appendMsg('user', `📍 ${kontenZona[zonaId].emoji} ${kontenZona[zonaId].judul}`);
+  }
+
+  // Typing indicator
+  const typing = document.createElement('div');
+  typing.className = 'typing'; typing.id = 'typing';
+  typing.innerHTML = '<span></span><span></span><span></span>';
+  chatArea.appendChild(typing);
+  chatArea.scrollTop = chatArea.scrollHeight;
+
+  try {
+    let promptFinal = '';
+    if (!dariUser && zonaId && kontenZona[zonaId]) {
+      promptFinal = kontenZona[zonaId].prompt;
+    } else {
+      const ctx = zonaAktif && kontenZona[zonaAktif]
+        ? `Konteks: siswa sedang melihat ${kontenZona[zonaAktif].judul} di peta NKRI. `
+        : '';
+      promptFinal = `${ctx}Pertanyaan siswa SMP kelas 7 tentang Wilayah NKRI (PPKn Kurikulum Merdeka Bab 5 hal 152-159): "${pertanyaanUser}". Jawab ramah, jelas, menarik, maksimal 4 kalimat.`;
+    }
+
+    // Panggil backend Netlify function
+    const res = await fetch('/api/claude', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ prompt: promptFinal, zona: zonaId })
+    });
+
+    const data = await res.json();
+    const jawaban = data.jawaban || data.error || 'AI tidak merespons. Coba lagi!';
+
+    document.getElementById('typing')?.remove();
+    const label = kontenZona[zonaId]?.judul || 'NKRI-AI';
+    appendMsg('ai', jawaban, label);
+
+    pesanTerakhirAI = jawaban;
+    document.getElementById('ttsBar').style.display = 'flex';
+    puterSuara(jawaban);
+
+  } catch (err) {
+    document.getElementById('typing')?.remove();
+    appendMsg('ai', `Koneksi ke AI gagal: ${err.message}. Pastikan sudah di-deploy ke Netlify dengan API key yang benar.`, 'Error');
+  }
+
+  sedangMemuat = false;
+  document.getElementById('btnTanya').disabled = false;
+}
+
+function appendMsg(tipe, teks, label = '') {
+  const chatArea = document.getElementById('chatArea');
+  const div = document.createElement('div');
+  div.className = tipe === 'ai' ? 'msg-ai' : 'msg-user';
+  if (tipe === 'ai' && label) {
+    const lbl = document.createElement('div');
+    lbl.className = 'msg-label';
+    lbl.textContent = `🤖 ${label}`;
+    div.appendChild(lbl);
+  }
+  const isi = document.createElement('div');
+  isi.textContent = teks;
+  div.appendChild(isi);
+  chatArea.appendChild(div);
+  chatArea.scrollTop = chatArea.scrollHeight;
+}
+
+// ============================================================
+// TEXT-TO-SPEECH (Web Speech API — gratis, built-in)
+// ============================================================
+function puterSuara(teks) {
+  if (!window.speechSynthesis) return;
+  stopSuara();
+  const utter = new SpeechSynthesisUtterance(teks);
+  utter.lang = 'id-ID';
+  utter.rate = 0.93;
+  utter.pitch = 1.05;
+  utter.volume = 1;
+
+  const voices = speechSynthesis.getVoices();
+  const v = voices.find(v => v.lang === 'id-ID') || voices.find(v => v.lang.startsWith('id')) || voices[0];
+  if (v) utter.voice = v;
+
+  utter.onstart = () => {
+    const btn = document.getElementById('btnSuara');
+    if (btn) { btn.classList.add('playing'); btn.textContent = '🔊 Sedang Menjelaskan...'; }
+  };
+  utter.onend = () => {
+    const btn = document.getElementById('btnSuara');
+    if (btn) { btn.classList.remove('playing'); btn.textContent = '🔊 Dengarkan Lagi'; }
+  };
+  speechSynthesis.speak(utter);
+}
+
+function ulangSuara() { if (pesanTerakhirAI) puterSuara(pesanTerakhirAI); }
+
+function stopSuara() {
+  if (window.speechSynthesis) speechSynthesis.cancel();
+  const btn = document.getElementById('btnSuara');
+  if (btn) { btn.classList.remove('playing'); btn.textContent = '🔊 Dengarkan Lagi'; }
+}
+
+if (window.speechSynthesis) {
+  speechSynthesis.onvoiceschanged = () => speechSynthesis.getVoices();
+}
+</script>
+</body>
+</html>
